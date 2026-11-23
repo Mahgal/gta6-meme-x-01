@@ -14,6 +14,11 @@ const OUT: string = process.env.MAKEFUN_OUTPUT_DIR ?? 'out';
 const IMAGE_NAME = 'gta6-meme.png';
 const imagePath: string = join(ROOT, 'assets', IMAGE_NAME);
 const image: Buffer = readFileSync(imagePath);
+// PNG signature: 8 bytes 89 50 4E 47 0D 0A 1A 0A. Fail loudly if the asset is not a PNG.
+const PNG_SIGNATURE: Buffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+if (image.length < 24 || !image.subarray(0, 8).equals(PNG_SIGNATURE)) {
+  throw new Error('gta6-meme.png is not a PNG: bad signature');
+}
 // PNG IHDR: width = bytes 16..19, height = bytes 20..23, big-endian.
 const width: number = image.readUInt32BE(16);
 const height: number = image.readUInt32BE(20);
@@ -38,6 +43,11 @@ const metadata = {
 
 mkdirSync(OUT, { recursive: true });
 copyFileSync(imagePath, join(OUT, IMAGE_NAME));
+// Verify the copy: read it back and confirm its SHA-256 matches the source.
+const copiedHash: string = createHash('sha256').update(readFileSync(join(OUT, IMAGE_NAME))).digest('hex');
+if (copiedHash !== sha256) {
+  throw new Error(`copy verification failed for ${IMAGE_NAME}: hash mismatch`);
+}
 const metadataJson: string = JSON.stringify(metadata, null, 2) + '\n';
 writeFileSync(join(OUT, 'post.json'), metadataJson);
 process.stdout.write(metadataJson);
